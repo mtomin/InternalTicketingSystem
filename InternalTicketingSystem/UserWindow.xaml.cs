@@ -4,16 +4,8 @@ using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
+using Dapper;
 
 namespace InternalTicketingSystem
 {
@@ -24,67 +16,68 @@ namespace InternalTicketingSystem
     {
         readonly string connectionString = ConfigurationManager.ConnectionStrings["AppDB"].ConnectionString;
         User currentUser = new User();
-        public UserWindow(int userID)
+        List<UserTicketDetails> userOpenTickets = new List<UserTicketDetails>();
+
+        public UserWindow(User currentUser)
         {
-            //TODO: Replace this with mapping - dapper supports it!
-            LoadUserData(userID);
-            
+            //Pull user data and display the "Logged in as *user* window title
+            InitializeComponent();
+            this.currentUser = currentUser;
+            this.Title = String.Format("Logged in as {0} {1}", currentUser.FirstName, currentUser.LastName);
+            LoadUserTickets(currentUser.UserID);
         }
 
         private void SubmitTicketButton_Click(object sender, RoutedEventArgs e)
         {
-            if (ticketDescriptionTextbox.Text=="" || ticketHeaderTextbox.Text == "")
+            Ticket ticket = new Ticket { IssueDescription = ticketDescriptionTextbox.Text, IssueHeader = ticketHeaderTextbox.Text };
+            if (ticket.IssueHeader == "" || ticket.IssueDescription == "")
             {
                 MessageBox.Show("Please enter both ticket title and description!");
             }
             else
             {
-                string query = "INSERT INTO Tickets " +
-                                "(UserID, IssueDescription, Date, IssueHeader)" +
-                                "VALUES (@userID, @description, @date, @header)";
+                ticket.Date = DateTime.Now;
+                ticket.UserID = currentUser.UserID;
 
-                using (SqlConnection connection = new SqlConnection(connectionString))
-                using (SqlCommand command = new SqlCommand(query, connection))
+                using (IDbConnection connection = new SqlConnection(connectionString))
                 {
-                    connection.Open();
-                    command.Parameters.AddWithValue("@userID", currentUser.ID);
-                    command.Parameters.AddWithValue("@description", ticketDescriptionTextbox.Text);
-                    command.Parameters.AddWithValue("@date", DateTime.Now);
-                    command.Parameters.AddWithValue("@header", ticketHeaderTextbox.Text);
-
-                    command.ExecuteNonQuery();
+                    connection.Execute("[dbo].[InsertTicket] @UserID, @IssueDescription, @Date, @IssueHeader", ticket);
                 }
-                LoadUserData(currentUser.ID);
-                //userTickets.Items.Refresh();
+
+                UserTicketDetails newTicket = new UserTicketDetails { FirstName = currentUser.FirstName, LastName = currentUser.LastName, IssueHeader = ticket.IssueHeader, Date = ticket.Date };
+                userOpenTickets.Insert(0, newTicket);
+                userTickets.Items.Refresh();
+
+                MessageBox.Show("Ticket submitted successfully!");
+                ticketDescriptionTextbox.Text = "";
+                ticketHeaderTextbox.Text = "";
             }
         }
-        private void LoadUserData(int userID)
+        private void LoadUserTickets(int userID)
         {
-            string query = "SELECT " +
-                            "FirstName, LastName, IssueHeader, Date " +
-                            "FROM Users LEFT JOIN Tickets on Users.UserID=Tickets.UserID " +
-                            "WHERE Users.UserID=@userID " +
-                            "ORDER BY Date DESC";
+            List<UserTicketDetails> userInfo = new List<UserTicketDetails>();
 
-            DataTable userInfo = new DataTable();
-            using (SqlConnection connection = new SqlConnection(connectionString))
-            using (SqlCommand command = new SqlCommand(query, connection))
-            using (SqlDataAdapter adapter = new SqlDataAdapter(command))
+            //Query the DB once, pulling all tickets from DB. Using left join in GetUserTickets to get user first and last name even if no tickets exist.
+            using (IDbConnection connection = new SqlConnection(connectionString))
             {
-                connection.Open();
-                command.Parameters.AddWithValue("@userID", userID);
-
-                adapter.Fill(userInfo);
+                userInfo = connection.Query<UserTicketDetails>("[dbo].[GetUserTickets] @UserID", new { UserID = userID }).ToList();
             }
 
-            currentUser.ID = userID;
-            currentUser.LastName = (string)userInfo.Rows[0]["LastName"];
-            currentUser.FirstName = (string)userInfo.Rows[0]["FirstName"];
+           //Filter out the closed tickets with LINQ to avoid querying the database two times. If no tickets exist, set listbox datacontext to null.
+           //All tickets are grabbed for future implementation of "My closed tickets" listbox
+            userOpenTickets = userInfo.Where(u => u.TicketClosedFlag == 0 && u.TicketID != 0).OrderByDescending(u => u.Date).ToList();
+            if (userOpenTickets != null)
+                userTickets.DataContext = userOpenTickets;
+            else
+                userTickets.DataContext = null;
+        }
 
-            InitializeComponent();
-            this.Title = String.Format("Logged in as {0} {1}", currentUser.FirstName, currentUser.LastName);
-
-            userTickets.DataContext = userInfo;
+        private void LogoutButton_Click(object sender, RoutedEventArgs e)
+        {
+            //Create a new login window and close the existing instance of UserWindow
+            LoginWindow loginWindow = new LoginWindow();
+            loginWindow.Show();
+            this.Close();
         }
     }
 }

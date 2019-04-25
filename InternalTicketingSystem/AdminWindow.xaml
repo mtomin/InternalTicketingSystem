@@ -8,11 +8,11 @@
         Title="AdminWindow" Height="450" Width="800">
 
     <Window.Resources>
-        <DataTemplate x:Key="tickets">
+        <DataTemplate x:Key="users">
             <TextBlock>
-                <Run Text="{Binding Date}"/>
                 <Run Text="{Binding LastName}"/>
-                <Run Text="{Binding IssueHeader}" />
+                <Run Text="{Binding FirstName}"/>
+                <Run Text="{Binding UserID}" />
             </TextBlock>
         </DataTemplate>
     </Window.Resources>
@@ -31,9 +31,31 @@
             <RowDefinition Height="*"/>
             <RowDefinition Height="10"/>
         </Grid.RowDefinitions>
-        <Button x:Name="addUserButton" Grid.Column="1" Grid.Row="1" Content="Add user" HorizontalAlignment="Center" VerticalAlignment="Center" Width="75" Click="AddUserButton_Click"/>
-        <ListView x:Name="userTickets" Grid.Column="1" Grid.Row="2" ItemTemplate="{StaticResource tickets}" ItemsSource="{Binding}" DisplayMemberPath="" SelectionChanged="UserTickets_SelectionChanged"/>
+        <Button x:Name="addUserButton" Grid.Column="1" Grid.Row="1" Content="Add user" HorizontalAlignment="Center" VerticalAlignment="Center" Width="100" Click="AddUserButton_Click"/>
+        <ListView x:Name="openTicketsListView" Grid.Column="1" Grid.Row="2" ItemsSource="{Binding}" DisplayMemberPath="" SelectionChanged="UserTickets_SelectionChanged">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn DisplayMemberBinding="{Binding TicketID}" Header="Ticket ID" Width="auto"/>
+                    <GridViewColumn DisplayMemberBinding="{Binding Date}" Header="Date issued" Width="auto"/>
+                    <GridViewColumn DisplayMemberBinding="{Binding LastName}" Header="User" Width="auto"/>
+                    <GridViewColumn DisplayMemberBinding="{Binding IssueHeader}" Header="Title" Width="auto"/>
+                </GridView>
+            </ListView.View>
+        </ListView>
         <TextBox x:Name="ticketDescriptionTextbox" Grid.Column="2" Grid.Row="2" TextWrapping="Wrap" IsReadOnly="True"/>
         <Label Content="Open tickets:" Grid.Column="1" HorizontalAlignment="Center" Grid.Row="1" VerticalAlignment="Bottom"/>
+        <Button x:Name="removeUserButton" Content="Remove user"  Margin="20,0,0,20" Grid.Column="2" HorizontalAlignment="Left" Grid.Row="1" VerticalAlignment="Bottom" Width="100" Click="RemoveUserButton_Click"/>
+        <Button x:Name="closeTicketButton" Content="Close ticket" Grid.Column="1" HorizontalAlignment="Center" Grid.Row="3" VerticalAlignment="Center" Width="100" Click="CloseTicketButton_Click"/>
+        <ListView x:Name="usersListView" Grid.Column="2" Grid.Row="1" VerticalAlignment="Stretch" Width="auto" MinWidth="200" ItemsSource="{Binding}" HorizontalAlignment="Right">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn DisplayMemberBinding="{Binding LastName}" Header="Last name" Width="auto"/>
+                    <GridViewColumn DisplayMemberBinding="{Binding FirstName}" Header="First name" Width="auto"/>
+                    <GridViewColumn DisplayMemberBinding="{Binding UserID}" Header="User ID" Width="auto"/>
+                </GridView>
+            </ListView.View>
+        </ListView>
+        <Button x:Name="loadUsersButton" Content="Load users" Margin="20,20,0,0" Grid.Column="2" HorizontalAlignment="Left" Grid.Row="1" VerticalAlignment="Top" Width="100" Click="LoadUsersButton_Click"/>
+        <Button x:Name="logoutButton" Content="Logout" Grid.Column="2" HorizontalAlignment="Center" Grid.Row="3" VerticalAlignment="Center" Width="100" Click="LogoutButton_Click"/>
     </Grid>
 </Window>

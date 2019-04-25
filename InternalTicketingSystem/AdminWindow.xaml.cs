@@ -1,19 +1,12 @@
-﻿using System;
+﻿using Dapper;
+using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
 
 namespace InternalTicketingSystem
 {
@@ -23,66 +16,172 @@ namespace InternalTicketingSystem
     public partial class AdminWindow : Window
     {
         readonly string connectionString = ConfigurationManager.ConnectionStrings["AppDB"].ConnectionString;
-        User currentUser = new User();
-        DataTable ticketInfo = new DataTable();
-        public AdminWindow(int userID)
+        List<User> userList = new List<User>();
+        List<UserTicketDetails> openedTicketsList = new List<UserTicketDetails>();
+        internal static User addedUser;
+
+        public AdminWindow(User currentUser)
         {
-            //TODO: Replace this with mapping - dapper supports it!
-            string query = "SELECT " +
-                            "FirstName, LastName " +
-                            "FROM Users "+
-                            "WHERE UserID=@userID ";
-
-            DataTable userInfo = new DataTable();
-            using (SqlConnection connection = new SqlConnection(connectionString))
-            using (SqlCommand command = new SqlCommand(query, connection))
-            using (SqlDataAdapter adapter = new SqlDataAdapter(command))
-            {
-                connection.Open();
-                command.Parameters.AddWithValue("@userID", userID);
-
-                adapter.Fill(userInfo);
-            }
-
-            currentUser.ID = userID;
-            currentUser.LastName = (string)userInfo.Rows[0]["LastName"];
-            currentUser.FirstName = (string)userInfo.Rows[0]["FirstName"];
             InitializeComponent();
             this.Title = String.Format("Logged in as {0} {1}", currentUser.FirstName, currentUser.LastName);
 
-            query = "SELECT " +
-                    "Date, FirstName, LastName, IssueHeader, IssueDescription " +
-                    "FROM Users INNER JOIN Tickets on Users.UserID=Tickets.UserID " +
-                    "WHERE TicketClosedFlag=0";
+            LoadOpenTickets();
 
-            ticketInfo = new DataTable();
-            using (SqlConnection connection = new SqlConnection(connectionString))
-            using (SqlCommand command = new SqlCommand(query, connection))
-            using (SqlDataAdapter adapter = new SqlDataAdapter(command))
+            //Hide the remove user button until user list is populated
+            removeUserButton.Visibility = Visibility.Hidden;
+        }
+
+        private void LoadOpenTickets()
+        {
+            ///Loads all tickets currently opened by all users and binds the userTickets listview to the list of opened tickets
+            using (IDbConnection connection = new SqlConnection(connectionString))
             {
-                connection.Open();
-                command.Parameters.AddWithValue("@userID", userID);
-
-                adapter.Fill(ticketInfo);
+                openedTicketsList = connection.Query<UserTicketDetails>("[dbo].[GetOpenTickets]").ToList();
             }
 
-            userTickets.DataContext = ticketInfo;
+            openTicketsListView.DataContext = openedTicketsList;
         }
 
         private void AddUserButton_Click(object sender, RoutedEventArgs e)
         {
+            ///Spawns a new instance of AddUserWindow
             AddUserWindow addUserWindow = new AddUserWindow();
-            addUserWindow.Show();
+            addUserWindow.ShowDialog();
+            //If user was added, get data from AddUserWindow via static variable addedUser and update the list of users
+            if (addedUser != null)
+            {
+                userList.Add(addedUser);
+                usersListView.Items.Refresh();
+            }
         }
 
         private void UserTickets_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            DataRow selectedDataRow = ticketInfo.Rows[userTickets.SelectedIndex];
-            DateTime date = (DateTime)(selectedDataRow["Date"]);
-            string userFirstName = (string)selectedDataRow["FirstName"];
-            string userLastName = (string)selectedDataRow["LastName"];
-            ticketDescriptionTextbox.Text = String.Format("Submitted on {0} by {1} {2}\n\n", date.ToString("MM/dd/yyyy hh:mm"), userFirstName, userLastName);
-            ticketDescriptionTextbox.Text += selectedDataRow["IssueDescription"].ToString();
+            if (openTicketsListView.SelectedIndex!=-1)
+            {
+                //Get the currently selected ticket details
+                UserTicketDetails selectedUserTicket = (UserTicketDetails)openTicketsListView.SelectedItem;
+
+                //If the user who opened the ticket was deleted and the ticket kept open, set the username for the "opened by *" message as (deleted)
+                string userFirstName;
+                string userLastName;
+                if (selectedUserTicket.FirstName != null)
+                {
+                    userFirstName = selectedUserTicket.FirstName;
+                }
+                else
+                {
+                    userFirstName = "";
+                }
+                if (selectedUserTicket.LastName != null)
+                {
+                    userLastName = selectedUserTicket.LastName;
+                }
+                else
+                {
+                    userLastName = "(deleted)";
+                }
+                
+                //Show the user who opened the ticket, date and ticket description
+                ticketDescriptionTextbox.Text = String.Format("Submitted on {0} by {1} {2}\n\n", selectedUserTicket.Date.ToString("MM/dd/yyyy hh:mm"), userFirstName, userLastName);
+                ticketDescriptionTextbox.Text += selectedUserTicket.IssueDescription;
+            }
+        }
+
+        private void LogoutButton_Click(object sender, RoutedEventArgs e)
+        {
+            ///Spawn a new LoginWindow and close current instance of AdminWindow
+            LoginWindow loginWindow = new LoginWindow();
+            loginWindow.Show();
+            this.Close();
+        }
+
+        private void LoadUsersButton_Click(object sender, RoutedEventArgs e)
+        {
+            ///Populate the contents of the user list and enable the "Remove user" button
+            using (IDbConnection connection = new SqlConnection(connectionString))
+            {
+                userList = connection.Query<User>("[dbo].[GetListOfUsers]").ToList();
+            }
+
+            usersListView.DataContext = userList;
+            removeUserButton.Visibility = Visibility.Visible;
+        }
+
+        private void RemoveUserButton_Click(object sender, RoutedEventArgs e)
+        {
+            //Check if an user has been selected
+            if (usersListView.SelectedIndex == -1)
+                MessageBox.Show("No user selected!");
+            else
+            {
+                User selectedUser = (User)usersListView.SelectedItem;
+                
+                MessageBoxResult messageBoxResult = MessageBox.Show(String.Format("Are you sure you want to remove user {0} {1} (UserID {2})?", selectedUser.FirstName, selectedUser.LastName, selectedUser.UserID), "Remove user?", MessageBoxButton.YesNo);
+                if (messageBoxResult == MessageBoxResult.Yes)
+                {
+                    //Remove user from database
+                    using (IDbConnection connection = new SqlConnection(connectionString))
+                    {
+                        connection.Execute("[dbo].[DeleteUser] @UserID", selectedUser);
+                    }
+
+                    //remove deleted results from user interface
+                    userList.Remove(selectedUser);
+
+                    //delete tickets opened by user?
+                    messageBoxResult = MessageBox.Show(String.Format("Do you want to delete all tickets opened by user {0} {1}?", selectedUser.FirstName, selectedUser.LastName, selectedUser.UserID), "Remove user tickets?", MessageBoxButton.YesNo);
+                    if (messageBoxResult == MessageBoxResult.Yes)
+                    {
+                        using (IDbConnection connection = new SqlConnection(connectionString))
+                        {
+                            connection.Execute("[dbo].[DeleteUserTickets] @UserID", selectedUser);
+                        }
+
+                        //remove deleted results from user interface
+                        var removeFromTicketList = openedTicketsList.AsEnumerable().Where(t => t.UserID == selectedUser.UserID).ToList();
+                        foreach (var ticket in removeFromTicketList)
+                        {
+                            openedTicketsList.Remove(ticket);
+                        }
+                        openTicketsListView.Items.Refresh();
+                    }
+                    MessageBox.Show("Done!", "User successfully removed");
+                    usersListView.Items.Refresh();
+                }
+            }
+        }
+
+        private void CloseTicketButton_Click(object sender, RoutedEventArgs e)
+        {
+            openTicketsListView.DataContext = openedTicketsList;
+            if (openTicketsListView.SelectedIndex == -1)
+            {
+                MessageBox.Show("No ticket selected!");
+            }
+            else
+            {
+                //probaj sa selecteditem
+                UserTicketDetails selectedTicket = (UserTicketDetails)openTicketsListView.SelectedItem;
+
+                MessageBoxResult messageBoxResult = MessageBox.Show("Are you sure you want to close this ticket?", "Close ticket", MessageBoxButton.YesNo);
+                if (messageBoxResult == MessageBoxResult.Yes)
+                {
+                    using (IDbConnection connection = new SqlConnection(connectionString))
+                    {
+                        connection.Execute("[dbo].[CloseTicket] @TicketID", selectedTicket);
+                    }
+
+                    //remove deleted results from user interface
+                    var removeFromTicketList = openedTicketsList.AsEnumerable().Where(t => t.TicketID == selectedTicket.TicketID).ToList();
+                    foreach (var ticketToRemove in removeFromTicketList)
+                    {
+                        openedTicketsList.Remove(ticketToRemove);
+                    }
+                    openTicketsListView.Items.Refresh();
+                    ticketDescriptionTextbox.Text = "";
+                }
+            }
         }
     }
 }

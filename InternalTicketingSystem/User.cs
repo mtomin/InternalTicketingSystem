@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace InternalTicketingSystem
+﻿namespace InternalTicketingSystem
 {
-    class User
+    public class User
     {
         public string FirstName { get; set; }
         public string LastName { get; set; }
@@ -16,7 +10,7 @@ namespace InternalTicketingSystem
         public string Username { get; set; }
         public string Salt { get; set; }
         public string Password { get; set; }
-        public int ID { get; set; }
+        public int UserID { get; set; }
         public int AdminFlag { get; set; }
     }
 }

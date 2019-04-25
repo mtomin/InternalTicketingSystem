@@ -6,20 +6,11 @@
         xmlns:local="clr-namespace:InternalTicketingSystem"
         mc:Ignorable="d"
         Title="UserWindow" Height="450" Width="800">
-    <Window.Resources>
-        <DataTemplate x:Key="submittedTickets">
-            <TextBlock>
-                <Run Text="{Binding Date}"/>
-                <Run Text="{Binding LastName}"/>
-                <Run Text="{Binding IssueHeader}" />
-            </TextBlock>
-        </DataTemplate>
-    </Window.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="10"/>
-            <RowDefinition Height="2*"/>
+            <RowDefinition Height="*"/>
             <RowDefinition Height="2*"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="2*"/>
@@ -36,7 +27,15 @@
         <TextBox x:Name="ticketHeaderTextbox" Grid.Column="2" Height="Auto" Grid.Row="1" TextWrapping="Wrap" VerticalAlignment="Center" MaxLength="100"/>
         <Label Content="Ticket subject (max. 100 characters)" Grid.Column="1" HorizontalAlignment="Center" Grid.Row="1" VerticalAlignment="Center"/>
         <Label Content="Description of the issue (max. 500 characters)" Grid.Column="1" HorizontalAlignment="Center" Grid.Row="2" VerticalAlignment="Center"/>
-        <Label Content="Currently active tickets:" Grid.Column="1" HorizontalAlignment="Center" Grid.Row="3" VerticalAlignment="Bottom"/>
-        <ListView x:Name="userTickets" Grid.Column="1" Grid.Row="4" ItemTemplate="{StaticResource submittedTickets}" ItemsSource="{Binding}" DisplayMemberPath=""/>
+        <Label Content="Currently active tickets:" Grid.Column="1" HorizontalAlignment="Center" Grid.Row="3" VerticalAlignment="Center"/>
+        <ListView x:Name="userTickets" Grid.Column="1" Grid.Row="4" ItemsSource="{Binding}">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn DisplayMemberBinding="{Binding Date}" Header="Date submitted" Width="auto"/>
+                    <GridViewColumn DisplayMemberBinding="{Binding IssueHeader}" Header="Issue description" Width="auto"/>
+                </GridView>
+            </ListView.View>
+        </ListView>
+        <Button x:Name="logoutButton" Content="Logout" Grid.Column="2" HorizontalAlignment="Center" Grid.Row="4" VerticalAlignment="Center" Width="200" Click="LogoutButton_Click"/>
     </Grid>
 </Window>

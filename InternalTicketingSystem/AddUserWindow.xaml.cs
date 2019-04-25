@@ -1,19 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Dapper;
+using System;
 using System.Configuration;
+using System.Data;
 using System.Data.SqlClient;
-using System.Linq;
 using System.Security.Cryptography;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
+
 
 namespace InternalTicketingSystem
 {
@@ -31,50 +23,33 @@ namespace InternalTicketingSystem
 
         private void AddUserButton_Click(object sender, RoutedEventArgs e)
         {
-            User enteredUser = new User();
+            //Return the user which has been added to the database (or null if no user has been added) via the static variable AdminWindow.addedUser
+            AdminWindow.addedUser = new User();
 
-            if (ReadData(enteredUser))
+            //Check if all required data has been entered and update Users and UserITInfo tables
+            if (ReadData(AdminWindow.addedUser))
             {
-                string query = "INSERT INTO Users" +
-                    "(FirstName, LastName, Address, City, Title) " +
-                    "VALUES (@firstName, @lastName, @address, @city, @title); " +
-                    "SELECT CAST(SCOPE_IDENTITY() AS INT)";
-                using (SqlConnection connection = new SqlConnection(connectionString))
-                using (SqlCommand command = new SqlCommand(query, connection))
+                using (IDbConnection connection = new SqlConnection(connectionString))
                 {
-                    connection.Open();
-                    command.Parameters.AddWithValue("@firstName", enteredUser.FirstName);
-                    command.Parameters.AddWithValue("@lastName", enteredUser.LastName);
-                    command.Parameters.AddWithValue("@address", enteredUser.Address);
-                    command.Parameters.AddWithValue("@city", enteredUser.City);
-                    command.Parameters.AddWithValue("@title", enteredUser.Title);
-                    enteredUser.ID = (int)command.ExecuteScalar();
+                    AdminWindow.addedUser.UserID = connection.QuerySingle<int>("[dbo].[InsertUser] @UserID, @FirstName, @LastName, @Address, @City, @Title", AdminWindow.addedUser);
+                    connection.Execute("[dbo].[InsertUserITInfo] @UserID, @Username, @Password, @AdminFlag, @Salt", AdminWindow.addedUser);
                 }
 
-                query = "INSERT INTO UserITInfo" +
-                    "(UserID, Username, Password, AdminFlag, Salt) " +
-                    "VALUES (@id, @username, @password, @adminFlag, @salt);";
-                using (SqlConnection connection = new SqlConnection(connectionString))
-                using (SqlCommand command = new SqlCommand(query, connection))
-                {
-                    connection.Open();
-                    command.Parameters.AddWithValue("@id", enteredUser.ID);
-                    command.Parameters.AddWithValue("@username", enteredUser.Username);
-                    command.Parameters.AddWithValue("@password", enteredUser.Password);
-                    command.Parameters.AddWithValue("@adminFlag", enteredUser.AdminFlag);
-                    command.Parameters.AddWithValue("@salt", enteredUser.Salt);
-                    command.ExecuteNonQuery();
-                }
                 MessageBox.Show("User successfully added!");
                 this.Close();
+            }
+            else
+            {
+                AdminWindow.addedUser = null;
             }
         }
 
         private bool ReadData(User enteredUser)
         {
+            ///Check if all data has been entered and populate the User properties from window textboxes. Show appropriate errors when necessary
             if (firstNameBox.Text == "")
             {
-                MessageBox.Show("First name must be entered!");
+                ShowErrorMessage("First name must be entered!");
                 return false;
             }
             else
@@ -83,7 +58,7 @@ namespace InternalTicketingSystem
             }
             if (lastNameBox.Text == "")
             {
-                MessageBox.Show("Last name must be entered!");
+                ShowErrorMessage("Last name must be entered!");
                 return false;
             }
             else
@@ -92,7 +67,7 @@ namespace InternalTicketingSystem
             }
             if (addressBox.Text == "")
             {
-                MessageBox.Show("Address must be entered!");
+                ShowErrorMessage("Address must be entered!");
                 return false;
             }
             else
@@ -101,7 +76,7 @@ namespace InternalTicketingSystem
             }
             if (cityBox.Text == "")
             {
-                MessageBox.Show("City must be entered!");
+                ShowErrorMessage("City must be entered!");
                 return false;
             }
             else
@@ -110,7 +85,7 @@ namespace InternalTicketingSystem
             }
             if (titleBox.Text == "")
             {
-                MessageBox.Show("User title must be entered!");
+                ShowErrorMessage("User title must be entered!");
                 return false;
             }
             else
@@ -119,39 +94,36 @@ namespace InternalTicketingSystem
             }
             if (usernameBox.Text == "")
             {
-                MessageBox.Show("Username must be entered!");
+                ShowErrorMessage("Username must be entered!");
                 return false;
             }
             else
             {
-                string query = "SELECT Username " +
-                               "FROM UserITInfo " +
-                               "Where Username=@currentUsername";
-                using (SqlConnection connection = new SqlConnection(connectionString))
-                using (SqlCommand command = new SqlCommand(query, connection))
+                User existingUser = new User();
+                using (IDbConnection connection = new SqlConnection(connectionString))
                 {
-                    command.Parameters.AddWithValue("@currentUsername", usernameBox.Text);
-                    connection.Open();
-                    string existingUsernames = (string)command.ExecuteScalar();
-                    if (existingUsernames == null)
-                    {
-                        enteredUser.Username = usernameBox.Text;
-                    }
-                    else
-                    {
-                        MessageBox.Show("Username already in use!");
-                        return false;
-                    }
+                    existingUser = connection.QuerySingleOrDefault<User>("[dbo].[GetLoginData] @UserID", enteredUser);
                 }
+                
+                if (existingUser == null)
+                {
+                    enteredUser.Username = usernameBox.Text;
+                }
+                else
+                {
+                    MessageBox.Show("Username already in use!");
+                    return false;
+                }
+
             }
             if (passwordBox.Password == "" || passwordBox2.Password == "")
             {
-                MessageBox.Show("A password must be entered!");
+                ShowErrorMessage("A password must be entered!");
                 return false;
             }
             else if (passwordBox.Password != passwordBox2.Password)
             {
-                MessageBox.Show("Entered passwords do not match!");
+                ShowErrorMessage("Entered passwords do not match!");
                 return false;
             }
             else
@@ -185,6 +157,10 @@ namespace InternalTicketingSystem
 
             enteredUser.Password=Convert.ToBase64String(passwordHash);
             enteredUser.Salt = Convert.ToBase64String(salt);
+        }
+        private void ShowErrorMessage(string errorString)
+        {
+            MessageBox.Show(errorString, "Invalid entry", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 }
