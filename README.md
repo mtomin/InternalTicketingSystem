@@ -5,6 +5,7 @@ This is a small WPF app allowing users to create tickets describing a certain pr
 ## Login
 
 The passwords are salted and hashed using PBKDF2. The current database cotains one admin and two users with login data of admin/admin, user/user and user2/user2 as well as one test ticket issued by user. Logging out returns the user to the Login window.
+
 ![alt text](https://i.imgur.com/bJ3C6dr.jpg "Login window")
 
 ## User screen
